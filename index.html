@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#7a1f1f" />
+  <title>La Pinsa Mia · Market Locator v7</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- ══ v7: Leaflet.js — free, no API key needed ══ -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans:    ['Inter', 'system-ui', 'sans-serif'],
+            display: ['"Playfair Display"', 'Georgia', 'serif'],
+          },
+          colors: {
+            brand: { 900: '#5c1414', 800: '#7a1f1f', 700: '#9a2b2b', 600: '#c0392b', 50: '#fdf4f4' },
+            cream: '#fdf8f0',
+            sand:  '#FAF7F2',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body { background: #fdf8f0; font-family: 'Inter', system-ui, sans-serif; color: #5c1414; }
+
+    .panel-grad { background: linear-gradient(160deg, #5c1414 0%, #7a1f1f 55%, #9a2b2b 100%); }
+    .ai-grad    { background: linear-gradient(160deg, #9a3412 0%, #c2410c 55%, #ea580c 100%); }
+    .sun-legible { text-shadow: 0 1px 0 rgba(255,255,255,0.18); letter-spacing: -0.01em; }
+
+    @keyframes pop    { 0% { transform: scale(.93); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes spin   { to { transform: rotate(360deg); } }
+    @keyframes shimmer { 0% { background-position: -600px 0; } 100% { background-position: 600px 0; } }
+    .pop     { animation: pop .28s ease both; }
+    .fade-up { animation: fadeUp .32s ease both; }
+    .spin    { animation: spin .7s linear infinite; }
+    .shimmer {
+      background: linear-gradient(90deg, #f5e8e8 25%, #ffe0cc 50%, #f5e8e8 75%);
+      background-size: 1200px 100%;
+      animation: shimmer 1.5s infinite linear;
+    }
+
+    .tab-btn { transition: all .2s ease; }
+    .tab-btn.active { background: #7a1f1f; color: #fdf8f0; box-shadow: 0 2px 8px rgba(122,31,31,.35); }
+    .tab-btn:not(.active) { color: #9a2b2b; }
+    .tab-btn:not(.active):hover { background: #fdf4f4; }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .collapsible { max-height: 0; overflow: hidden; transition: max-height .45s ease; }
+    .collapsible.open { max-height: 8000px; }
+    .chev-icon { transition: transform .25s ease; }
+    .chev-icon.rotated { transform: rotate(180deg); }
+
+    .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .sort-th { cursor: pointer; user-select: none; }
+    .sort-th:hover { color: #5c1414; }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(92,20,20,.45);
+      backdrop-filter: blur(4px); z-index: 500;
+      display: flex; align-items: center; justify-content: center; padding: 1.25rem;
+      opacity: 0; pointer-events: none; transition: opacity .22s ease;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal-box {
+      background: #fff; border-radius: 20px;
+      width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto;
+      transform: translateY(16px) scale(.97); transition: transform .22s ease;
+    }
+    .modal-overlay.open .modal-box { transform: translateY(0) scale(1); }
+
+    .confirm-overlay {
+      position: fixed; inset: 0; background: rgba(92,20,20,.55);
+      backdrop-filter: blur(4px); z-index: 600;
+      display: flex; align-items: center; justify-content: center; padding: 1.25rem;
+      opacity: 0; pointer-events: none; transition: opacity .18s ease;
+    }
+    .confirm-overlay.open { opacity: 1; pointer-events: all; }
+    .confirm-box {
+      background: #fff; border-radius: 20px; padding: 2rem;
+      max-width: 380px; width: 100%; text-align: center;
+      transform: translateY(10px); transition: transform .18s ease;
+    }
+    .confirm-overlay.open .confirm-box { transform: translateY(0); }
+
+    #toastStack {
+      position: fixed; top: 4.5rem; right: 1.25rem; z-index: 700;
+      display: flex; flex-direction: column; gap: .5rem; pointer-events: none;
+    }
+    @keyframes toastIn  { from { opacity: 0; transform: translateX(24px) scale(.96); } to { opacity: 1; transform: translateX(0) scale(1); } }
+    @keyframes toastOut { from { opacity: 1; transform: translateX(0) scale(1); } to { opacity: 0; transform: translateX(24px) scale(.96); } }
+    .toast {
+      animation: toastIn .25s cubic-bezier(.22,1,.36,1) both;
+      border-radius: 14px; pointer-events: all;
+      display: flex; align-items: flex-start; gap: .55rem;
+      padding: .75rem 1.1rem; font-size: .82rem; font-weight: 700;
+      box-shadow: 0 6px 28px rgba(0,0,0,.22); max-width: 320px; line-height: 1.35;
+    }
+    .toast.out     { animation: toastOut .22s ease forwards; }
+    .toast-success { background: #14532d; color: #dcfce7; }
+    .toast-error   { background: #7f1d1d; color: #fee2e2; }
+    .toast-info    { background: #1e3a5f; color: #dbeafe; }
+    .toast-warn    { background: #78350f; color: #fef3c7; }
+    .toast-ai      { background: #4c1d95; color: #ede9fe; }
+
+    input:focus, select:focus { outline: 2.5px solid #7a1f1f; outline-offset: 1px; }
+    input[type="text"]::placeholder, input[type="search"]::placeholder { color: #c09090; }
+
+    .badge-LA { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+    .badge-OC { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+    .badge-SD { background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
+    .badge-SB { background:#fdf4ff; border:1px solid #e9d5ff; color:#7e22ce; }
+
+    .field-label { font-size:.72rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#7a1f1f; opacity:.7; display:block; margin-bottom:.35rem; }
+    .field-input { width:100%; padding:.65rem .9rem; font-family:'Inter',sans-serif; font-size:.92rem; border:1.5px solid #e8d8d8; border-radius:10px; background:#fdf8f0; color:#5c1414; transition:border-color .2s, box-shadow .2s; }
+    .field-input:focus { border-color:#7a1f1f; box-shadow:0 0 0 3px rgba(122,31,31,.12); }
+    .field-input.err { border-color:#c0392b; box-shadow:0 0 0 3px rgba(192,57,43,.10); }
+    .field-error-msg { font-size:.74rem; color:#c0392b; font-weight:700; margin-top:.3rem; min-height:.9rem; }
+
+    .day-Sunday    { background:#dbeafe; color:#1d4ed8; }
+    .day-Monday    { background:#dcfce7; color:#166534; }
+    .day-Tuesday   { background:#ccfbf1; color:#0f766e; }
+    .day-Wednesday { background:#e0e7ff; color:#4338ca; }
+    .day-Thursday  { background:#fef9c3; color:#854d0e; }
+    .day-Friday    { background:#ffedd5; color:#c2410c; }
+    .day-Saturday  { background:#f3e8ff; color:#7e22ce; }
+
+    mark.match-hl { background:#fef08a; color:#5c1414; border-radius:3px; padding:0 2px; font-weight:800; }
+    #typeAheadHint { transition: opacity .2s ease; }
+
+    .county-bar-track { flex:1; background:#f3e8e8; border-radius:99px; height:8px; overflow:hidden; }
+    .county-bar-fill  { height:100%; border-radius:99px; transition:width .6s cubic-bezier(.22,1,.36,1); }
+
+    #importFile { display:none; }
+    .admin-row:hover td { background:#fdf4f4; }
+
+    .ls-pill { display:inline-flex; align-items:center; gap:.35rem; font-size:.65rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; padding:.2rem .65rem; border-radius:50px; }
+    .ls-pill.ok   { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+    .ls-pill.warn { background:#fef3c7; color:#854d0e; border:1px solid #fde68a; }
+
+    @media (max-width:640px) { .hide-mobile { display:none !important; } }
+
+    /* ══ v7: Map styles ══ */
+    #marketMap { height: 260px; z-index: 1; }
+    @media (min-width: 640px) { #marketMap { height: 310px; } }
+
+    /* Brand-styled Leaflet popups */
+    .lpm-popup .leaflet-popup-content-wrapper {
+      border-radius: 14px !important;
+      box-shadow: 0 8px 24px rgba(92,20,20,.2), 0 2px 6px rgba(0,0,0,.08) !important;
+      border: 1.5px solid #e8d0d0;
+    }
+    .lpm-popup .leaflet-popup-content { margin: 10px 13px !important; }
+    .lpm-popup .leaflet-popup-tip     { background: #fff !important; }
+    .leaflet-control-zoom a           { font-family: Inter, sans-serif !important; color: #7a1f1f !important; }
+    .leaflet-control-zoom a:hover     { background: #fdf4f4 !important; }
+  </style>
+</head>
+
+<body class="min-h-screen antialiased">
+
+  <!-- STICKY NAV -->
+  <nav class="sticky top-0 z-[200] bg-white/95 backdrop-blur border-b border-red-100 shadow-sm">
+    <div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
+      <div class="font-display font-black text-brand-800 text-lg leading-none whitespace-nowrap">
+        La&nbsp;<span class="text-brand-600">Pinsa</span>&nbsp;Mia
+      </div>
+      <div class="flex bg-red-50 rounded-xl p-1 gap-1 ring-1 ring-red-100">
+        <button id="tabLocator" class="tab-btn active rounded-lg px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap" onclick="switchTab('locator')">
+          <span>🗺</span><span class="hide-mobile">Find Market</span>
+        </button>
+        <button id="tabAdmin" class="tab-btn rounded-lg px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap" onclick="switchTab('admin')">
+          <span>⚙️</span><span class="hide-mobile">Admin Panel</span>
+        </button>
+      </div>
+      <div class="flex items-center gap-2">
+        <div id="aiNavBadge" class="hidden sm:flex items-center gap-1 text-[10px] font-extrabold rounded-full px-2.5 py-1 border"></div>
+        <div id="lsStatusPill" class="ls-pill ok hide-mobile">
+          <span>💾</span><span id="lsStatusLabel">Saved</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+
+  <!-- PAGE 1 — LOCATOR -->
+  <div id="pageLoc" class="page active">
+
+    <header class="panel-grad text-cream px-5 pt-8 pb-12 rounded-b-[2.5rem] shadow-xl">
+      <div class="max-w-md mx-auto text-center">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/15 ring-1 ring-white/30 mb-3 text-3xl">🍕</div>
+        <p class="uppercase tracking-[.32em] text-[11px] font-extrabold text-amber-200/90">Artisanal Italian Pinsa</p>
+        <h1 class="font-display text-4xl font-black leading-tight mt-1 sun-legible text-cream">La Pinsa Mia</h1>
+        <p class="mt-1 text-lg font-extrabold tracking-tight text-cream/95">Market Locator</p>
+        <p class="mt-3 text-sm text-cream/75 leading-relaxed max-w-xs mx-auto">Enter your ZIP code to find where we're firing up the oven across Southern California.</p>
+      </div>
+    </header>
+
+    <main class="max-w-md mx-auto px-5 -mt-6 pb-10">
+
+      <!-- Search card -->
+      <section class="bg-white rounded-2xl shadow-lg ring-1 ring-black/5 p-5 pop">
+        <label for="zipInput" class="block text-sm font-extrabold text-brand-800 mb-2">Your ZIP Code</label>
+        <div class="flex gap-2">
+          <input
+            id="zipInput" type="text" inputmode="numeric" autocomplete="postal-code"
+            maxlength="5" placeholder="e.g. 92101"
+            class="flex-1 min-w-0 text-2xl font-black tracking-widest text-brand-900 bg-cream rounded-xl px-4 py-3 ring-2 ring-brand-700/20 focus:ring-brand-700 focus:outline-none transition-all"
+          />
+          <button id="searchBtn" onclick="handleSearch()"
+            class="shrink-0 panel-grad text-white font-extrabold px-5 rounded-xl shadow-md transition-all active:scale-95 text-lg flex items-center gap-2 min-w-[80px] justify-center">
+            <svg id="locSpinner" class="spin w-4 h-4 hidden" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <span id="locBtnLabel">Find</span>
+          </button>
+        </div>
+        <div id="errorBadge" class="hidden pop mt-3 flex items-center gap-2 bg-red-100 text-red-800 ring-1 ring-red-300 rounded-xl px-3 py-2.5 text-sm font-bold" role="alert">
+          <span>⛔</span><span>Invalid format. Please enter a 5-digit ZIP code.</span>
+        </div>
+        <div id="typeAheadHint" class="hidden mt-2.5 flex items-center gap-2">
+          <span class="text-[10px] text-brand-800/40 font-semibold">Showing matches for</span>
+          <span id="typeAheadQuery" class="text-[10px] font-black text-brand-700 bg-amber-100 border border-amber-300 rounded px-1.5 py-0.5 font-mono"></span>
+          <span id="typeAheadCount" class="text-[10px] text-brand-800/40 font-semibold"></span>
+        </div>
+        <div id="aiSearchHint" class="mt-2.5"></div>
+        <p class="text-center text-[11px] text-brand-800/40 mt-2.5">Press <kbd class="bg-red-50 border border-red-200 rounded px-1 font-mono text-[10px]">Enter</kbd> or tap Find · Type to filter markets below</p>
+      </section>
+
+      <!-- ══ v7: DYNAMIC MAP ══ -->
+      <div class="mt-4 bg-white rounded-2xl shadow-md ring-1 ring-black/5 overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-red-100">
+          <span class="flex items-center gap-2 text-xs font-extrabold text-brand-800">
+            📍 Live Market Map
+            <span id="mapCountBadge" class="text-[10px] font-semibold text-brand-800/40 font-sans normal-case">28 locations</span>
+          </span>
+          <button onclick="resetMapView()" class="text-[10px] font-bold text-brand-800/35 hover:text-brand-700 transition-colors uppercase tracking-wider">Reset</button>
+        </div>
+        <div id="marketMap"></div>
+        <p class="text-center text-[10px] text-brand-800/30 py-1.5">Click any pin to see details · Use +/− to zoom</p>
+      </div>
+
+      <!-- Result area -->
+      <section id="resultArea" class="mt-4" aria-live="polite"></section>
+
+      <!-- All markets expandable -->
+      <details class="mt-6 bg-white rounded-2xl shadow-md ring-1 ring-black/5 overflow-hidden" id="allMarketsDetails">
+        <summary class="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none font-extrabold text-sm text-brand-800 hover:bg-cream transition-colors">
+          <span class="flex items-center gap-2">
+            <span>📋</span>
+            All Active Markets (<span id="marketCountLabel">28</span>)
+            <span id="filteringBadge" class="hidden text-[10px] font-black text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5">Filtered</span>
+          </span>
+          <svg id="allMktsChev" class="chev-icon w-4 h-4 text-brand-800/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </summary>
+        <div class="tbl-wrap border-t border-red-100">
+          <table class="w-full text-xs font-sans min-w-[440px]">
+            <thead class="panel-grad text-cream/90">
+              <tr>
+                <th class="text-left px-3 py-2.5 font-bold">#</th>
+                <th class="text-left px-3 py-2.5 font-bold">Market</th>
+                <th class="text-left px-3 py-2.5 font-bold">ZIP</th>
+                <th class="text-left px-3 py-2.5 font-bold">Day</th>
+                <th class="text-left px-3 py-2.5 font-bold hide-mobile">Hours</th>
+              </tr>
+            </thead>
+            <tbody id="refTableBody" class="divide-y divide-red-50 text-brand-900"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <p class="text-center text-[11px] text-brand-800/40 mt-5 mb-2">
+        Serving <span id="footerMarketCount">28</span> active markets · Southern California
+      </p>
+    </main>
+  </div>
+
+
+  <!-- PAGE 2 — ADMIN -->
+  <div id="pageAdmin" class="page">
+    <header class="panel-grad text-cream px-5 py-5 shadow-lg">
+      <div class="max-w-5xl mx-auto flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white/15 ring-1 ring-white/30 flex items-center justify-center text-xl">⚙️</div>
+          <div>
+            <div class="font-display text-xl font-black sun-legible">Admin Panel</div>
+            <div class="text-[10px] font-bold uppercase tracking-widest text-amber-200/80">Market Database · Persistent CRUD · v7 + Map + ChatGPT</div>
+          </div>
+        </div>
+        <div class="text-right hide-mobile">
+          <div class="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Persistence Layer</div>
+          <div class="text-[11px] font-bold text-green-300">● localStorage Active</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="max-w-5xl mx-auto px-4 py-6 pb-12">
+
+      <div class="flex items-start gap-3 bg-white ring-1 ring-green-200 rounded-2xl px-4 py-3 mb-5 shadow-sm">
+        <span class="text-xl mt-0.5">💾</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-extrabold text-green-800 uppercase tracking-wider mb-0.5">localStorage Persistence Active</div>
+          <div class="text-[11px] text-green-700 leading-snug">All edits write to <code class="bg-green-100 px-1 rounded font-mono">localStorage</code> instantly and survive page refreshes.</div>
+        </div>
+        <div class="text-right shrink-0">
+          <div id="adminMktCount" class="font-display text-2xl font-black text-green-700">28</div>
+          <div class="text-[10px] font-bold uppercase tracking-wider text-green-600">markets</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4" id="adminStats"></div>
+      <div class="flex flex-wrap gap-2 mb-5" id="dayBreakdown"></div>
+
+      <div class="flex flex-wrap items-center gap-2 mb-3">
+        <input id="adminSearch" type="search" placeholder="Search name, city, ZIP…"
+          class="flex-1 min-w-[160px] text-sm px-3 py-2 rounded-xl bg-white ring-1 ring-red-100 focus:ring-brand-700 text-brand-900 font-semibold focus:outline-none"
+          oninput="renderAdminTable()" />
+        <select id="countyFilter" class="text-sm px-3 py-2 rounded-xl bg-white ring-1 ring-red-100 text-brand-900 font-semibold focus:outline-none cursor-pointer" onchange="renderAdminTable()">
+          <option value="">All Counties</option>
+          <option value="LA">LA County</option>
+          <option value="OC">Orange County</option>
+          <option value="SD">San Diego</option>
+          <option value="SB">San Bernardino</option>
+        </select>
+        <button onclick="openAddModal()"  class="panel-grad text-white text-xs font-extrabold uppercase tracking-wider px-4 py-2 rounded-xl shadow-sm active:scale-95 transition-all">＋ Add</button>
+        <button onclick="exportData()"    class="bg-white text-brand-800 text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-xl ring-1 ring-red-200 hover:bg-cream transition-colors">⬇ Export</button>
+        <label class="bg-white text-brand-800 text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-xl ring-1 ring-red-200 hover:bg-cream transition-colors cursor-pointer">
+          ⬆ Import<input type="file" id="importFile" accept=".json" onchange="importData(event)" />
+        </label>
+        <button onclick="triggerReset()" class="text-xs font-bold text-brand-800/50 hover:text-brand-700 transition-colors px-2 py-2">↺ Reset</button>
+      </div>
+      <div class="text-xs font-bold text-brand-800/50 uppercase tracking-wider mb-2" id="adminCount"></div>
+
+      <div class="tbl-wrap bg-white rounded-2xl shadow-md ring-1 ring-red-100 overflow-hidden mb-8">
+        <table class="w-full text-xs font-sans min-w-[560px]">
+          <thead class="bg-cream border-b border-red-100">
+            <tr>
+              <th class="sort-th text-left px-3 py-3 font-extrabold text-brand-800/60 uppercase tracking-wider text-[10px]" data-col="name"   onclick="setSort('name')">Name <span class="sort-ind"></span></th>
+              <th class="sort-th text-left px-3 py-3 font-extrabold text-brand-800/60 uppercase tracking-wider text-[10px]" data-col="city"   onclick="setSort('city')">City <span class="sort-ind"></span></th>
+              <th class="sort-th text-left px-3 py-3 font-extrabold text-brand-800/60 uppercase tracking-wider text-[10px]" data-col="county" onclick="setSort('county')">County <span class="sort-ind"></span></th>
+              <th class="sort-th text-left px-3 py-3 font-extrabold text-brand-800/60 uppercase tracking-wider text-[10px]" data-col="zip"    onclick="setSort('zip')">ZIP <span class="sort-ind"></span></th>
+              <th class="sort-th text-left px-3 py-3 font-extrabold text-brand-800/60 uppercase tracking-wider text-[10px] hide-mobile" data-col="day" onclick="setSort('day')">Day <span class="sort-ind"></span></th>
+              <th class="text-left px-3 py-3 font-extrabold text-brand-800/60 uppercase tracking-wider text-[10px] hide-mobile">Hours</th>
+              <th class="text-right px-3 py-3 font-extrabold text-brand-800/60 uppercase tracking-wider text-[10px]">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="adminTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- BI Panel -->
+      <div>
+        <button id="biToggle" onclick="toggleBI()"
+          class="w-full flex items-center justify-between bg-brand-900 text-cream px-4 py-3 rounded-2xl font-extrabold text-sm shadow-md hover:bg-brand-800 transition-colors">
+          <span class="flex items-center gap-2">
+            📊 Business Intelligence · ZIP Telemetry &amp; Market Analytics
+            <span id="biLiveBadge" class="hidden bg-red-700 text-red-200 text-[10px] font-black px-2 py-0.5 rounded-full">0</span>
+          </span>
+          <svg id="biChev" class="chev-icon w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+
+        <div id="biBody" class="collapsible">
+          <div class="bg-white ring-1 ring-red-100 rounded-2xl mt-3 p-5 shadow-inner space-y-6">
+
+            <!-- County Distribution -->
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-[10px] font-extrabold uppercase tracking-widest text-brand-800/60">📍 County Market Distribution</h3>
+                <span class="text-[10px] font-bold text-brand-800/40 uppercase tracking-wider">Chapter 7 · Strategic BI</span>
+              </div>
+              <div id="countyInlineReadout" class="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-[11px] font-extrabold text-brand-800/70 font-mono"></div>
+              <div id="countyBars" class="space-y-3"></div>
+              <p class="text-[10px] text-brand-800/30 mt-3 italic">Live from localStorage. Updates after every CRUD operation.</p>
+            </div>
+
+            <hr class="border-red-100" />
+
+            <div class="flex items-start gap-2 p-2.5 bg-violet-50 ring-1 ring-violet-100 rounded-xl">
+              <span class="text-sm mt-0.5">🤖</span>
+              <p class="text-[11px] font-bold text-violet-800 leading-snug">
+                All searches persist to <code class="bg-violet-100 px-1 rounded font-mono">lpm_v7_telemetry</code>. ChatGPT results log as <strong>AI_FALLBACK</strong>.
+              </p>
+            </div>
+
+            <!-- KPIs -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div class="rounded-xl p-3 text-center ring-1 ring-red-100"    style="background:#fbeeee">
+                <div id="kpiTotal"    class="text-2xl font-black text-brand-800 font-display">0</div>
+                <div class="text-[10px] font-extrabold uppercase tracking-wider text-brand-800/60 mt-1 leading-tight">Total<br>Searches</div>
+              </div>
+              <div class="rounded-xl p-3 text-center ring-1 ring-green-100"  style="background:#eaf6ec">
+                <div id="kpiDirect"   class="text-2xl font-black text-green-700 font-display">0</div>
+                <div class="text-[10px] font-extrabold uppercase tracking-wider text-green-800/60 mt-1 leading-tight">Direct<br>Matches</div>
+              </div>
+              <div class="rounded-xl p-3 text-center ring-1 ring-orange-100" style="background:#fcf0e2">
+                <div id="kpiFallback" class="text-2xl font-black text-orange-600 font-display">0</div>
+                <div class="text-[10px] font-extrabold uppercase tracking-wider text-orange-800/60 mt-1 leading-tight">Math<br>Fallbacks</div>
+              </div>
+              <div class="rounded-xl p-3 text-center ring-1 ring-violet-100" style="background:#f3e8ff">
+                <div id="kpiAI"       class="text-2xl font-black text-violet-700 font-display">0</div>
+                <div class="text-[10px] font-extrabold uppercase tracking-wider text-violet-800/60 mt-1 leading-tight">AI<br>Fallbacks</div>
+              </div>
+            </div>
+
+            <hr class="border-red-100" />
+
+            <!-- Audit Table -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-[10px] font-extrabold uppercase tracking-widest text-brand-800/50">ZIP_Search Audit Table</h3>
+                <button onclick="clearTelemetry()" class="text-[10px] font-bold text-brand-800/40 hover:text-red-600 transition-colors border border-red-100 hover:border-red-300 rounded-lg px-2 py-1 uppercase tracking-wider">Clear All</button>
+              </div>
+              <div class="tbl-wrap rounded-xl ring-1 ring-red-100 overflow-hidden">
+                <table class="w-full text-xs min-w-[420px]">
+                  <thead class="panel-grad text-cream/90">
+                    <tr>
+                      <th class="text-left px-3 py-2 font-bold">Search_ID</th>
+                      <th class="text-left px-3 py-2 font-bold">Query_ZIP</th>
+                      <th class="text-left px-3 py-2 font-bold">Timestamp (UTC)</th>
+                      <th class="text-left px-3 py-2 font-bold">Match_Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="auditBody" class="divide-y divide-red-50 font-mono bg-white"></tbody>
+                </table>
+              </div>
+              <p class="text-[10px] text-brand-800/30 mt-3 leading-relaxed">
+                IT599 Capstone · La Pinsa Mia · Ezer Ayari · Prototype v7
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- MODAL — Add / Edit -->
+  <div class="modal-overlay" id="marketModal" role="dialog" aria-modal="true" aria-labelledby="modalHeading">
+    <div class="modal-box">
+      <div class="flex items-center justify-between px-6 py-5 border-b border-red-100">
+        <h2 class="font-display text-2xl font-black text-brand-900" id="modalHeading">Add Market</h2>
+        <button onclick="closeModal()" class="text-brand-800/40 hover:text-brand-800 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-cream">&times;</button>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <input type="hidden" id="editId" />
+        <div>
+          <label class="field-label" for="fName">Market Name <span class="text-brand-600">*</span></label>
+          <input type="text" id="fName" class="field-input" placeholder="e.g. Brentwood Farmers Market" maxlength="120" />
+          <div class="field-error-msg" id="eName"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="field-label" for="fCity">City <span class="text-brand-600">*</span></label>
+            <input type="text" id="fCity" class="field-input" placeholder="e.g. Santa Monica" maxlength="80" />
+            <div class="field-error-msg" id="eCity"></div>
+          </div>
+          <div>
+            <label class="field-label" for="fCounty">County <span class="text-brand-600">*</span></label>
+            <select id="fCounty" class="field-input">
+              <option value="">Select…</option>
+              <option value="LA">LA — Los Angeles</option>
+              <option value="OC">OC — Orange County</option>
+              <option value="SD">SD — San Diego</option>
+              <option value="SB">SB — San Bernardino</option>
+            </select>
+            <div class="field-error-msg" id="eCounty"></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="field-label" for="fZip">ZIP Code <span class="text-brand-600">*</span></label>
+            <input type="text" id="fZip" class="field-input" placeholder="e.g. 90210" maxlength="5" inputmode="numeric" />
+            <div class="field-error-msg" id="eZip"></div>
+          </div>
+          <div>
+            <label class="field-label" for="fDay">Day <span class="text-brand-600">*</span></label>
+            <select id="fDay" class="field-input" onchange="toggleCustomDay()">
+              <option value="">Select…</option>
+              <option>Sunday</option><option>Monday</option><option>Tuesday</option>
+              <option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option>
+              <option value="Tuesday & Saturday">Tue &amp; Sat</option>
+              <option value="Saturday (1st & 3rd)">Sat (1st &amp; 3rd)</option>
+              <option value="__custom">Custom…</option>
+            </select>
+            <div class="field-error-msg" id="eDay"></div>
+          </div>
+        </div>
+        <div id="customDayWrap" class="hidden">
+          <label class="field-label" for="fDayCustom">Custom Day</label>
+          <input type="text" id="fDayCustom" class="field-input" placeholder="e.g. Mon & Thu" maxlength="60" />
+        </div>
+        <div>
+          <label class="field-label" for="fTime">Hours <span class="text-brand-600">*</span></label>
+          <input type="text" id="fTime" class="field-input" placeholder="e.g. 09:00 AM - 01:00 PM" maxlength="60" />
+          <div class="field-error-msg" id="eTime"></div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 px-6 py-4 border-t border-red-100">
+        <button onclick="closeModal()" class="text-sm font-bold px-4 py-2 rounded-xl ring-1 ring-red-200 text-brand-800 hover:bg-cream transition-colors">Cancel</button>
+        <button onclick="saveMarket()" class="text-sm font-extrabold px-5 py-2 rounded-xl panel-grad text-white shadow-sm active:scale-95 transition-all" id="modalSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm dialog -->
+  <div class="confirm-overlay" id="confirmDialog" role="alertdialog" aria-modal="true">
+    <div class="confirm-box">
+      <div class="text-3xl mb-3" id="confirmIcon">⚠️</div>
+      <div class="font-display text-xl font-black text-brand-900 mb-2" id="confirmTitle">Are you sure?</div>
+      <div class="text-sm text-brand-800/60 mb-6 leading-snug" id="confirmMsg">This cannot be undone.</div>
+      <div class="flex gap-3 justify-center">
+        <button onclick="closeConfirm()" class="text-sm font-bold px-5 py-2.5 rounded-xl ring-1 ring-red-200 text-brand-800 hover:bg-cream transition-colors">Cancel</button>
+        <button id="confirmOkBtn" onclick="runConfirm()" class="text-sm font-extrabold px-5 py-2.5 rounded-xl bg-red-700 text-white hover:bg-red-800 transition-colors">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastStack" aria-live="polite" aria-atomic="false"></div>
+
+
+  <script>
+    'use strict';
+
+    // ── OpenAI config ─────────────────────────────────────────────────
+    const OPENAI_API_KEY = 'YOUR_API_KEY_HERE';
+    const OPENAI_MODEL   = "gpt-4o-mini";
+
+    // ── Storage keys ──────────────────────────────────────────────────
+    const LS_MARKETS   = 'lpm_v7_markets';
+    const LS_TELEMETRY = 'lpm_v7_telemetry';
+
+    // ══════════════════════════════════════════════════════════════════
+    // MARKET DATABASE — 28 locations with lat/lng for the map
+    // ══════════════════════════════════════════════════════════════════
+    const BASELINE = [
+      { id:  1, name: "Long Beach Marina Farmers Market",        city: "Long Beach",         county: "LA", zip: "90803", day: "Sunday",               time: "9:00 AM - 2:00 PM",  lat: 33.7512, lng: -118.1225 },
+      { id:  2, name: "Bellflower Farmers' Market",              city: "Bellflower",          county: "LA", zip: "90706", day: "Monday",               time: "3:00 PM - 7:00 PM",  lat: 33.8816, lng: -118.1170 },
+      { id:  3, name: "Claremont Farmers Market",                city: "Claremont",           county: "LA", zip: "91711", day: "Sunday",               time: "8:00 AM - 1:00 PM",  lat: 34.0966, lng: -117.7198 },
+      { id:  4, name: "Beverly Hills Farmers Market",            city: "Beverly Hills",       county: "LA", zip: "90210", day: "Sunday",               time: "9:00 AM - 1:00 PM",  lat: 34.0736, lng: -118.4004 },
+      { id:  5, name: "Melrose Place Farmers Market",            city: "Los Angeles",         county: "LA", zip: "90069", day: "Sunday",               time: "8:00 AM - 2:00 PM",  lat: 34.0823, lng: -118.3697 },
+      { id:  6, name: "Downtown Manhattan Beach Farmers Market", city: "Manhattan Beach",     county: "LA", zip: "90266", day: "Tuesday",              time: "11:00 AM - 3:00 PM", lat: 33.8847, lng: -118.4109 },
+      { id:  7, name: "Torrance Certified Farmers Market",       city: "Torrance",            county: "LA", zip: "90501", day: "Tuesday & Saturday",   time: "8:00 AM - 1:00 PM",  lat: 33.8358, lng: -118.3406 },
+      { id:  8, name: "Larchmont Village Farmers Market",        city: "Los Angeles",         county: "LA", zip: "90004", day: "Wednesday",            time: "1:00 PM - 5:00 PM",  lat: 34.0737, lng: -118.3247 },
+      { id:  9, name: "San Juan Capistrano Farmers Market",      city: "San Juan Capistrano", county: "OC", zip: "92675", day: "Friday",               time: "9:00 AM - 1:00 PM",  lat: 33.5017, lng: -117.6626 },
+      { id: 10, name: "Orange Home Grown Farmers Market",        city: "Orange",              county: "OC", zip: "92866", day: "Saturday",             time: "9:00 AM - 1:00 PM",  lat: 33.7879, lng: -117.8531 },
+      { id: 11, name: "Dana Point Farmers Market",               city: "Dana Point",          county: "OC", zip: "92629", day: "Saturday",             time: "9:00 AM - 1:00 PM",  lat: 33.4669, lng: -117.6981 },
+      { id: 12, name: "SoCo Farmers Market",                     city: "Costa Mesa",          county: "OC", zip: "92626", day: "Saturday",             time: "9:00 AM - 2:00 PM",  lat: 33.6411, lng: -117.9187 },
+      { id: 13, name: "Corona Del Mar Farmers Market",           city: "Newport Beach",       county: "OC", zip: "92625", day: "Saturday",             time: "9:00 AM - 1:00 PM",  lat: 33.5945, lng: -117.8732 },
+      { id: 14, name: "Aliso Viejo Farmers Market",              city: "Aliso Viejo",         county: "OC", zip: "92656", day: "Saturday",             time: "8:00 AM - 1:00 PM",  lat: 33.5769, lng: -117.7253 },
+      { id: 15, name: "Yorba Linda Farmers Market",              city: "Yorba Linda",         county: "OC", zip: "92886", day: "Saturday",             time: "9:00 AM - 1:00 PM",  lat: 33.8886, lng: -117.8131 },
+      { id: 16, name: "Rancho Mission Viejo Farmers Market",     city: "San Juan Capistrano", county: "OC", zip: "92675", day: "Saturday (1st & 3rd)", time: "9:00 AM - 1:00 PM",  lat: 33.5400, lng: -117.6453 },
+      { id: 17, name: "Ladera Ranch Farmers Market",             city: "Ladera Ranch",        county: "OC", zip: "92694", day: "Sunday",               time: "9:00 AM - 1:00 PM",  lat: 33.5625, lng: -117.6547 },
+      { id: 18, name: "Laguna Niguel Farmers Market",            city: "Laguna Niguel",       county: "OC", zip: "92677", day: "Sunday",               time: "8:00 AM - 12:00 PM", lat: 33.5225, lng: -117.7075 },
+      { id: 19, name: "Stonegate Farmers Market",                city: "Irvine",              county: "OC", zip: "92620", day: "Sunday",               time: "9:00 AM - 1:00 PM",  lat: 33.7175, lng: -117.7456 },
+      { id: 20, name: "Placentia Certified Farmers Market",      city: "Placentia",           county: "OC", zip: "92870", day: "Tuesday",              time: "3:00 PM - 8:00 PM",  lat: 33.8722, lng: -117.8703 },
+      { id: 21, name: "Lake Forest Market",                      city: "Lake Forest",         county: "OC", zip: "92610", day: "Wednesday",            time: "4:00 PM - 8:00 PM",  lat: 33.6469, lng: -117.6892 },
+      { id: 22, name: "Chino Hills Farmers Market",              city: "Chino Hills",         county: "SB", zip: "91709", day: "Wednesday",            time: "4:00 PM - 8:00 PM",  lat: 33.9939, lng: -117.7289 },
+      { id: 23, name: "La Mesa Farmers Market",                  city: "La Mesa",             county: "SD", zip: "91942", day: "Friday",               time: "3:00 PM - 7:00 PM",  lat: 32.7678, lng: -117.0230 },
+      { id: 24, name: "Cardiff Farmers Market",                  city: "Cardiff-by-the-Sea",  county: "SD", zip: "92007", day: "Saturday",             time: "10:00 AM - 2:00 PM", lat: 33.0150, lng: -117.2836 },
+      { id: 25, name: "Poway Farmers Market",                    city: "Poway",               county: "SD", zip: "92064", day: "Saturday",             time: "8:00 AM - 1:00 PM",  lat: 32.9628, lng: -117.0359 },
+      { id: 26, name: "Vista Farmers Market",                    city: "Vista",               county: "SD", zip: "92081", day: "Saturday",             time: "8:00 AM - 12:00 PM", lat: 33.2000, lng: -117.2425 },
+      { id: 27, name: "Hillcrest Farmers Market",                city: "San Diego",           county: "SD", zip: "92103", day: "Sunday",               time: "9:00 AM - 2:00 PM",  lat: 32.7470, lng: -117.1630 },
+      { id: 28, name: "State Street Farmers Market",             city: "Carlsbad",            county: "SD", zip: "92008", day: "Wednesday",            time: "3:00 PM - 7:00 PM",  lat: 33.1581, lng: -117.3506 }
+    ];
+
+    // ── localStorage helpers ──────────────────────────────────────────
+    function loadMarkets() {
+      try { const r = localStorage.getItem(LS_MARKETS); if (r) return JSON.parse(r); } catch(e) {}
+      const f = JSON.parse(JSON.stringify(BASELINE));
+      persistMarkets(f); return f;
+    }
+    function persistMarkets(d) {
+      try { localStorage.setItem(LS_MARKETS, JSON.stringify(d)); flashStorageStatus('ok'); }
+      catch(e) { flashStorageStatus('warn'); }
+    }
+    function loadTelemetry() {
+      try { const r = localStorage.getItem(LS_TELEMETRY); return r ? JSON.parse(r) : []; } catch(e) { return []; }
+    }
+    function persistTelemetry() {
+      try { localStorage.setItem(LS_TELEMETRY, JSON.stringify(ZIP_Search_Table)); } catch(e) {}
+    }
+    function flashStorageStatus(s) {
+      const pill = document.getElementById('lsStatusPill');
+      const lbl  = document.getElementById('lsStatusLabel');
+      pill.className = `ls-pill ${s}`; lbl.textContent = s === 'ok' ? 'Saved' : 'Error';
+      clearTimeout(pill._t);
+      pill._t = setTimeout(() => { pill.className = 'ls-pill ok'; lbl.textContent = 'Saved'; }, 2200);
+    }
+    function nextId() { return markets.length === 0 ? 1 : Math.max(...markets.map(m => m.id)) + 1; }
+
+    // ── Boot state ────────────────────────────────────────────────────
+    let markets          = loadMarkets();
+    let ZIP_Search_Table = loadTelemetry();
+    let searchSeq        = ZIP_Search_Table.length > 0 ? Math.max(...ZIP_Search_Table.map(r => r.id)) : 0;
+    const KPI = {
+      get total()    { return ZIP_Search_Table.length; },
+      get direct()   { return ZIP_Search_Table.filter(r => r.status === 'DIRECT_MATCH').length; },
+      get fallback() { return ZIP_Search_Table.filter(r => r.status === 'OUT_OF_BOUNDS').length; },
+      get ai()       { return ZIP_Search_Table.filter(r => r.status === 'AI_FALLBACK').length; },
+    };
+
+    // ══════════════════════════════════════════════════════════════════
+    // v7 — LEAFLET MAP (Carto Voyager tiles, no API key required)
+    // ══════════════════════════════════════════════════════════════════
+
+    let map         = null;   // Leaflet map instance
+    let pins        = {};     // { marketId → CircleMarker }
+    let activePin   = null;   // currently highlighted market id
+
+    const PIN_DEFAULT  = { radius: 7,  fillColor: '#9a2b2b', color: '#7a1f1f', weight: 2, fillOpacity: 0.85, opacity: 1 };
+    const PIN_DIRECT   = { radius: 14, fillColor: '#15803d', color: '#14532d', weight: 3, fillOpacity: 0.95 };
+    const PIN_FALLBACK = { radius: 14, fillColor: '#ea580c', color: '#9a3412', weight: 3, fillOpacity: 0.95 };
+    const PIN_AI       = { radius: 14, fillColor: '#7c3aed', color: '#4c1d95', weight: 3, fillOpacity: 0.95 };
+
+    function initMap() {
+      if (map) return;
+
+      map = L.map('marketMap', {
+        center: [33.65, -117.85],
+        zoom: 9,
+        scrollWheelZoom: false,
+        zoomControl: true,
+      });
+
+      // Carto Voyager — clean modern basemap, free for open use
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 19,
+      }).addTo(map);
+
+      plotPins();
+    }
+
+    function plotPins() {
+      // Remove any existing pins
+      Object.values(pins).forEach(p => p.remove());
+      pins = {}; activePin = null;
+
+      markets.forEach(m => {
+        if (!m.lat || !m.lng) return;
+        const pin = L.circleMarker([m.lat, m.lng], { ...PIN_DEFAULT })
+          .bindPopup(pinPopup(m), { className: 'lpm-popup', maxWidth: 230 })
+          .addTo(map);
+        pins[m.id] = pin;
+      });
+
+      updateMapBadge(markets.length);
+    }
+
+    function pinPopup(m) {
+      return `<div style="font-family:Inter,sans-serif;line-height:1.45">
+        <div style="font-weight:900;font-size:13px;color:#5c1414;margin-bottom:3px">${m.name}</div>
+        <div style="font-size:11px;color:#7a1f1f;margin-bottom:1px">📍 ${m.city}, CA &nbsp;·&nbsp; ${m.zip}</div>
+        <div style="font-size:11px;color:#9a2b2b">${m.day} &nbsp;·&nbsp; ${m.time}</div>
+      </div>`;
+    }
+
+    // Called after a search to highlight & fly to the result pin
+    function highlightPin(marketId, type) {
+      // Reset previous highlight
+      if (activePin !== null && pins[activePin]) {
+        pins[activePin].setStyle({ ...PIN_DEFAULT });
+      }
+      const pin = pins[marketId];
+      if (!pin) return;
+      const style = type === 'direct' ? PIN_DIRECT : type === 'ai' ? PIN_AI : PIN_FALLBACK;
+      pin.setStyle(style);
+      pin.openPopup();
+      map.flyTo(pin.getLatLng(), 13, { duration: 0.8, easeLinearity: 0.35 });
+      activePin = marketId;
+    }
+
+    function resetMapView() {
+      if (activePin !== null && pins[activePin]) {
+        pins[activePin].setStyle({ ...PIN_DEFAULT });
+        activePin = null;
+      }
+      map.flyTo([33.65, -117.85], 9, { duration: 0.6 });
+      updateMapBadge(markets.length);
+    }
+
+    function updateMapBadge(n) {
+      const el = document.getElementById('mapCountBadge');
+      if (el) el.textContent = n === markets.length ? `${n} locations` : `${n} of ${markets.length} shown`;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // NAVIGATION
+    // ══════════════════════════════════════════════════════════════════
+
+    function switchTab(tab) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(tab === 'locator' ? 'pageLoc' : 'pageAdmin').classList.add('active');
+      document.getElementById(tab === 'locator' ? 'tabLocator' : 'tabAdmin').classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (tab === 'locator' && map) setTimeout(() => map.invalidateSize(), 80);
+      if (tab === 'admin') { renderAdminStats(); renderAdminTable(); renderCountyBreakdown(); }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // LOCATOR ENGINE
+    // ══════════════════════════════════════════════════════════════════
+
+    const ZIP_REGEX = /^\d{5}$/;
+
+    function findMarket(zip) {
+      const zipStr = String(zip), zipNum = parseInt(zipStr, 10);
+      const exact = markets.find(m => m.zip === zipStr);
+      if (exact) return { market: exact, type: 'DIRECT_MATCH' };
+      const prefix   = zipStr.slice(0,3);
+      const byPrefix = markets.filter(m => m.zip.slice(0,3) === prefix)
+        .sort((a,b) => Math.abs(parseInt(a.zip)-zipNum) - Math.abs(parseInt(b.zip)-zipNum));
+      if (byPrefix.length) return { market: byPrefix[0], type: 'OUT_OF_BOUNDS' };
+      const closest = [...markets].sort((a,b) => Math.abs(parseInt(a.zip)-zipNum) - Math.abs(parseInt(b.zip)-zipNum));
+      return { market: closest[0], type: 'OUT_OF_BOUNDS' };
+    }
+
+    async function handleSearch() {
+      const input  = document.getElementById('zipInput');
+      const zip    = input.value.trim();
+      const errEl  = document.getElementById('errorBadge');
+      const resEl  = document.getElementById('resultArea');
+      const spin   = document.getElementById('locSpinner');
+      const btnLbl = document.getElementById('locBtnLabel');
+
+      errEl.classList.add('hidden');
+      resEl.innerHTML = '';
+      input.classList.remove('ring-red-400');
+
+      if (!ZIP_REGEX.test(zip)) {
+        errEl.classList.remove('hidden');
+        input.classList.add('ring-red-400');
+        input.focus(); return;
+      }
+
+      spin.classList.remove('hidden'); btnLbl.textContent = '…';
+      document.getElementById('searchBtn').disabled = true;
+
+      const { market: mathMarket, type } = findMarket(zip);
+
+      if (type === 'DIRECT_MATCH') {
+        await new Promise(r => setTimeout(r, 320));
+        asyncPushTelemetry(zip, 'DIRECT_MATCH');
+        renderResult(mathMarket, 'DIRECT_MATCH', zip);
+        highlightPin(mathMarket.id, 'direct');             // ← map
+        spin.classList.add('hidden'); btnLbl.textContent = 'Find';
+        document.getElementById('searchBtn').disabled = false;
+        return;
+      }
+
+      // OUT_OF_BOUNDS — show skeleton, try AI
+      showAIThinkingState(zip);
+      spin.classList.add('hidden'); btnLbl.textContent = 'Find';
+      document.getElementById('searchBtn').disabled = false;
+
+      const apiReady = OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_API_KEY_HERE';
+      if (!apiReady) {
+        await new Promise(r => setTimeout(r, 480));
+        asyncPushTelemetry(zip, 'OUT_OF_BOUNDS');
+        renderResult(mathMarket, 'OUT_OF_BOUNDS', zip);
+        highlightPin(mathMarket.id, 'fallback');           // ← map
+        return;
+      }
+
+      try {
+        const aiData   = await callOpenAIFallback(zip);
+        const aiMarket = markets.find(m => m.name === aiData.marketName) || mathMarket;
+        asyncPushTelemetry(zip, 'AI_FALLBACK');
+        renderAIFallbackResult(aiMarket, aiData, zip);
+        highlightPin(aiMarket.id, 'ai');                   // ← map (violet)
+        toast('🤖 AI market recommendation ready!', 'ai');
+      } catch(err) {
+        console.error('[v7 OpenAI]', err);
+        asyncPushTelemetry(zip, 'OUT_OF_BOUNDS');
+        renderResult(mathMarket, 'OUT_OF_BOUNDS', zip);
+        highlightPin(mathMarket.id, 'fallback');           // ← map
+        toast('AI unavailable — showing nearest by distance', 'warn');
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // OPENAI FALLBACK
+    // ══════════════════════════════════════════════════════════════════
+
+    async function callOpenAIFallback(zip) {
+      const ctx = markets.map(m => ({ name: m.name, city: m.city, zip: m.zip, county: m.county }));
+      const sys = `You are a SoCal geography expert for La Pinsa Mia. Market database: ${JSON.stringify(ctx)}. The customer searched ZIP "${zip}" which has no exact match. Find the geographically closest market. Reply ONLY with valid JSON: {"marketName":"...","estimatedDriveTime":"...","helpfulMessage":"..."}`;
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: `ZIP: ${zip}` }],
+          max_tokens: 200, temperature: 0.2,
+          response_format: { type: 'json_object' },
+        }),
+      });
+      if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+      const j = await res.json();
+      const p = JSON.parse(j.choices[0].message.content);
+      if (!p.marketName || !p.estimatedDriveTime || !p.helpfulMessage) throw new Error('Bad keys');
+      return p;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // RESULT RENDERERS
+    // ══════════════════════════════════════════════════════════════════
+
+    function showAIThinkingState(zip) {
+      document.getElementById('resultArea').innerHTML = `
+        <div class="fade-up space-y-3">
+          <div class="flex items-center gap-3 bg-violet-50 ring-1 ring-violet-200 rounded-xl px-4 py-3">
+            <svg class="spin w-5 h-5 text-violet-600 shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <div>
+              <p class="text-sm font-extrabold text-violet-900">🤖 ChatGPT analyzing ZIP ${esc(zip)}…</p>
+              <p class="text-[11px] text-violet-700 mt-0.5">Finding your closest market using AI</p>
+            </div>
+          </div>
+          <div class="rounded-2xl overflow-hidden shadow-md ring-2 ring-orange-200">
+            <div class="shimmer h-20"></div>
+            <div class="bg-white p-4 space-y-2">
+              <div class="shimmer h-3 rounded-full w-2/3"></div>
+              <div class="shimmer h-3 rounded-full w-1/2"></div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderResult(market, type, queryZip) {
+      const isDirect = type === 'DIRECT_MATCH';
+      const dayKey   = market.day.split(' ')[0];
+      const mapsUrl  = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(market.name + ' ' + market.city + ' CA ' + market.zip)}`;
+      const banner   = isDirect
+        ? `<div class="pop mb-3 flex items-center gap-2 bg-green-100 text-green-800 ring-1 ring-green-300 rounded-xl px-3 py-2.5 text-sm font-bold"><span>✅</span><span>We're in your ZIP code! See you at the market.</span></div>`
+        : `<div class="pop mb-3 flex items-start gap-2 bg-orange-100 text-orange-800 ring-1 ring-orange-300 rounded-xl px-3 py-2.5 text-sm font-bold leading-snug"><span class="mt-0.5">📍</span><span>No direct market in your ZIP — showing the closest location by distance.</span></div>`;
+      document.getElementById('resultArea').innerHTML = `
+        <div class="fade-up">${banner}
+          <article class="bg-white rounded-2xl shadow-lg ring-1 ring-black/5 overflow-hidden">
+            <div class="panel-grad text-cream px-5 py-4">
+              <p class="text-[10px] uppercase tracking-[.28em] text-amber-200/80 font-extrabold">Active Market · ${isDirect ? 'Direct Match' : 'Closest Location'}</p>
+              <h2 class="font-display text-2xl font-black leading-tight sun-legible mt-0.5">${esc(market.name)}</h2>
+              <p class="text-cream/80 text-sm font-semibold mt-0.5">${esc(market.city)}, CA &middot; ${esc(market.zip)}</p>
+            </div>
+            <div class="grid grid-cols-2 divide-x divide-red-100">
+              <div class="px-5 py-4">
+                <p class="text-[10px] uppercase tracking-wider text-brand-800/50 font-extrabold">Market Day</p>
+                <span class="inline-block mt-1.5 text-sm font-extrabold rounded-lg px-2.5 py-1 day-${dayKey}">${esc(market.day)}</span>
+              </div>
+              <div class="px-5 py-4">
+                <p class="text-[10px] uppercase tracking-wider text-brand-800/50 font-extrabold">Hours</p>
+                <p class="text-sm font-extrabold text-brand-900 mt-1">${esc(market.time)}</p>
+              </div>
+            </div>
+            <div class="flex gap-3 px-5 py-4 border-t border-red-100">
+              <a href="${mapsUrl}" target="_blank" rel="noopener" class="flex-1 flex items-center justify-center gap-2 panel-grad text-white font-extrabold text-sm rounded-xl py-3 px-4 shadow-sm active:scale-95 transition-all">🗺 Directions</a>
+              <button onclick="shareMarket('${esc(market.name)}','${esc(market.city)}','${esc(market.day)}','${esc(market.time)}')" class="flex items-center justify-center gap-1.5 ring-2 ring-brand-700 text-brand-800 font-extrabold text-sm rounded-xl py-3 px-4 hover:bg-cream active:scale-95 transition-all">↗ Share</button>
+            </div>
+            <div class="flex items-center justify-between px-5 py-2.5 bg-cream border-t border-red-100">
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-brand-800/40">La Pinsa Mia · Market #${market.id}</span>
+              <span class="text-[10px] font-mono text-brand-800/30">ZIP: ${esc(queryZip)}</span>
+            </div>
+          </article>
+        </div>`;
+    }
+
+    function renderAIFallbackResult(market, aiData, queryZip) {
+      const dayKey  = market.day.split(' ')[0];
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(market.name + ' ' + market.city + ' CA ' + market.zip)}`;
+      document.getElementById('resultArea').innerHTML = `
+        <div class="fade-up">
+          <div class="mb-3 flex items-start gap-3 bg-orange-50 ring-1 ring-orange-300 rounded-xl px-4 py-3">
+            <span class="text-xl mt-0.5 shrink-0">🤖</span>
+            <div>
+              <p class="text-sm font-extrabold text-orange-900">ChatGPT AI Recommendation</p>
+              <p class="text-[12px] text-orange-800 leading-snug mt-0.5">${esc(aiData.helpfulMessage)}</p>
+            </div>
+          </div>
+          <article class="bg-white rounded-2xl shadow-xl ring-2 ring-orange-300 overflow-hidden">
+            <div class="ai-grad text-white px-5 py-4">
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <p class="text-[10px] uppercase tracking-[.28em] text-orange-100/80 font-extrabold">AI Match · ZIP ${esc(queryZip)}</p>
+                <span class="text-[10px] font-black bg-white/20 rounded-full px-2 py-0.5">🤖 ${esc(OPENAI_MODEL)}</span>
+              </div>
+              <h2 class="font-display text-2xl font-black leading-tight sun-legible">${esc(market.name)}</h2>
+              <p class="text-orange-100 text-sm font-semibold mt-0.5">${esc(market.city)}, CA &middot; ${esc(market.zip)}</p>
+            </div>
+            <div class="flex items-center gap-3 bg-orange-50 border-b border-orange-100 px-5 py-3">
+              <span class="text-2xl">🚗</span>
+              <div>
+                <p class="text-[10px] uppercase tracking-wider text-orange-700/60 font-extrabold">Estimated Drive Time</p>
+                <p class="text-lg font-black text-orange-900">${esc(aiData.estimatedDriveTime)}</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 divide-x divide-orange-100">
+              <div class="px-5 py-4">
+                <p class="text-[10px] uppercase tracking-wider text-brand-800/50 font-extrabold">Market Day</p>
+                <span class="inline-block mt-1.5 text-sm font-extrabold rounded-lg px-2.5 py-1 day-${dayKey}">${esc(market.day)}</span>
+              </div>
+              <div class="px-5 py-4">
+                <p class="text-[10px] uppercase tracking-wider text-brand-800/50 font-extrabold">Hours</p>
+                <p class="text-sm font-extrabold text-brand-900 mt-1">${esc(market.time)}</p>
+              </div>
+            </div>
+            <div class="flex gap-3 px-5 py-4 border-t border-orange-100">
+              <a href="${mapsUrl}" target="_blank" rel="noopener" class="flex-1 flex items-center justify-center gap-2 ai-grad text-white font-extrabold text-sm rounded-xl py-3 px-4 shadow-sm active:scale-95 transition-all">🗺 Directions</a>
+              <button onclick="shareMarket('${esc(market.name)}','${esc(market.city)}','${esc(market.day)}','${esc(market.time)}')" class="flex items-center justify-center gap-1.5 ring-2 ring-orange-400 text-orange-800 font-extrabold text-sm rounded-xl py-3 px-4 hover:bg-orange-50 active:scale-95 transition-all">↗ Share</button>
+            </div>
+            <div class="flex items-center justify-between px-5 py-2.5 bg-orange-50 border-t border-orange-100">
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-orange-800/50">La Pinsa Mia · AI Recommendation</span>
+              <span class="text-[10px] font-mono text-orange-800/35">ZIP: ${esc(queryZip)}</span>
+            </div>
+          </article>
+        </div>`;
+    }
+
+    function shareMarket(name, city, day, time) {
+      const text = `Find La Pinsa Mia at:\n${name}\n${city}, CA\n${day} · ${time}\nlapinsamia.com`;
+      if (navigator.share) navigator.share({ title: 'La Pinsa Mia Market', text });
+      else navigator.clipboard.writeText(text).then(() => toast('Market info copied!', 'info'));
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // TYPE-AHEAD FILTERING
+    // ══════════════════════════════════════════════════════════════════
+
+    function highlightMatch(raw, q) {
+      if (!q) return esc(raw);
+      const idx = raw.toLowerCase().indexOf(q.toLowerCase());
+      if (idx === -1) return esc(raw);
+      return esc(raw.slice(0,idx)) + `<mark class="match-hl">${esc(raw.slice(idx,idx+q.length))}</mark>` + esc(raw.slice(idx+q.length));
+    }
+
+    function filterRefTable() {
+      const raw     = document.getElementById('zipInput').value.trim();
+      const q       = raw.toLowerCase();
+      const details = document.getElementById('allMarketsDetails');
+      const hint    = document.getElementById('typeAheadHint');
+      const badge   = document.getElementById('filteringBadge');
+
+      if (!q) {
+        hint.classList.add('hidden');
+        badge.classList.add('hidden');
+        document.getElementById('marketCountLabel').textContent = markets.length;
+        renderRefTable();
+        return;
+      }
+
+      const filtered = markets.filter(m =>
+        m.zip.startsWith(raw) || m.city.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+      );
+      hint.classList.remove('hidden');
+      document.getElementById('typeAheadQuery').textContent = raw;
+      document.getElementById('typeAheadCount').textContent = `— ${filtered.length} market${filtered.length !== 1 ? 's' : ''} found`;
+      badge.classList.toggle('hidden', filtered.length === markets.length);
+      if (filtered.length > 0 && !details.open) details.open = true;
+      document.getElementById('marketCountLabel').textContent = filtered.length;
+
+      const tbody = document.getElementById('refTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-brand-800/40 italic text-xs">No markets match "<strong>${esc(raw)}</strong>"</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = filtered.map(m => `
+        <tr class="hover:bg-cream transition-colors">
+          <td class="px-3 py-2.5 text-brand-800/40 font-mono text-[11px]">${m.id}</td>
+          <td class="px-3 py-2.5 font-semibold text-brand-900">${highlightMatch(m.name, q)}</td>
+          <td class="px-3 py-2.5 font-mono font-black text-brand-700">${highlightMatch(m.zip, raw)}</td>
+          <td class="px-3 py-2.5 text-brand-800/70">${esc(m.day)}</td>
+          <td class="px-3 py-2.5 text-brand-800/60 hide-mobile">${esc(m.time)}</td>
+        </tr>`).join('');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // TELEMETRY
+    // ══════════════════════════════════════════════════════════════════
+
+    function asyncPushTelemetry(zip, status) {
+      return new Promise(resolve => setTimeout(() => {
+        searchSeq++;
+        const rec = { id: searchSeq, zip, ts: new Date().toISOString().replace('T',' ').replace('Z',' UTC'), status };
+        ZIP_Search_Table.unshift(rec);
+        persistTelemetry();
+        renderTelemetry();
+        const b = document.getElementById('biLiveBadge');
+        b.textContent = ZIP_Search_Table.length; b.classList.remove('hidden');
+        resolve(rec);
+      }, 0));
+    }
+
+    function renderTelemetry() {
+      document.getElementById('kpiTotal').textContent    = KPI.total;
+      document.getElementById('kpiDirect').textContent   = KPI.direct;
+      document.getElementById('kpiFallback').textContent = KPI.fallback;
+      document.getElementById('kpiAI').textContent       = KPI.ai;
+      const tbody = document.getElementById('auditBody');
+      if (ZIP_Search_Table.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-5 text-brand-800/30 italic text-[11px] font-sans">No searches yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = ZIP_Search_Table.map((r, i) => {
+        const b = r.status === 'DIRECT_MATCH'
+          ? `<span class="bg-green-100 text-green-700 border border-green-200 text-[10px] font-bold uppercase rounded px-1.5 py-0.5">DIRECT_MATCH</span>`
+          : r.status === 'AI_FALLBACK'
+            ? `<span class="bg-violet-100 text-violet-700 border border-violet-200 text-[10px] font-bold uppercase rounded px-1.5 py-0.5">AI_FALLBACK 🤖</span>`
+            : `<span class="bg-orange-100 text-orange-700 border border-orange-200 text-[10px] font-bold uppercase rounded px-1.5 py-0.5">OUT_OF_BOUNDS</span>`;
+        return `<tr class="${i===0?'bg-red-50/60':''} hover:bg-cream transition-colors">
+          <td class="px-3 py-2 text-brand-800/50">#${String(r.id).padStart(4,'0')}</td>
+          <td class="px-3 py-2 font-black text-brand-900 text-sm">${esc(r.zip)}</td>
+          <td class="px-3 py-2 text-brand-800/60 text-[10px]">${esc(r.ts)}</td>
+          <td class="px-3 py-2">${b}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function clearTelemetry() {
+      ZIP_Search_Table.length = 0; searchSeq = 0;
+      try { localStorage.removeItem(LS_TELEMETRY); } catch(e) {}
+      renderTelemetry();
+      const b = document.getElementById('biLiveBadge'); b.textContent = '0'; b.classList.add('hidden');
+      toast('Telemetry cleared', 'warn');
+    }
+
+    function toggleBI() {
+      const body = document.getElementById('biBody'), chev = document.getElementById('biChev');
+      const open = body.classList.toggle('open');
+      chev.classList.toggle('rotated', open);
+      if (open) renderCountyBreakdown();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COUNTY BREAKDOWN
+    // ══════════════════════════════════════════════════════════════════
+
+    const COUNTY_META = {
+      LA: { label:'Los Angeles',    fillColor:'#ea580c', trackBg:'#ffedd5' },
+      OC: { label:'Orange County',  fillColor:'#16a34a', trackBg:'#dcfce7' },
+      SD: { label:'San Diego',      fillColor:'#2563eb', trackBg:'#dbeafe' },
+      SB: { label:'San Bernardino', fillColor:'#9333ea', trackBg:'#f3e8ff' },
+    };
+
+    function renderCountyBreakdown() {
+      const total = markets.length; if (!total) return;
+      const c = { LA:0, OC:0, SD:0, SB:0 };
+      markets.forEach(m => { if (c[m.county] !== undefined) c[m.county]++; });
+      document.getElementById('countyInlineReadout').innerHTML =
+        Object.entries(c).map(([k,n]) => `<span><strong style="color:${COUNTY_META[k].fillColor}">${k}</strong>: ${((n/total)*100).toFixed(1)}%</span>`).join('<span class="text-brand-800/20 mx-1">|</span>');
+      document.getElementById('countyBars').innerHTML =
+        Object.entries(c).map(([k,n]) => {
+          const pct = ((n/total)*100).toFixed(1), m = COUNTY_META[k];
+          return `<div class="flex items-center gap-3">
+            <div class="w-7 text-right"><span class="text-[10px] font-extrabold uppercase" style="color:${m.fillColor}">${k}</span></div>
+            <div class="county-bar-track" style="background:${m.trackBg}"><div class="county-bar-fill" style="width:${pct}%;background:${m.fillColor}"></div></div>
+            <div class="flex items-center gap-2 min-w-[110px]">
+              <span class="text-[11px] font-extrabold" style="color:${m.fillColor}">${pct}%</span>
+              <span class="text-[10px] text-brand-800/50 font-semibold">${n} mkt${n!==1?'s':''}</span>
+              <span class="text-[10px] text-brand-800/30 hide-mobile">· ${m.label}</span>
+            </div>
+          </div>`;
+        }).join('');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // ADMIN — Stats & Table
+    // ══════════════════════════════════════════════════════════════════
+
+    let sortCol = 'name', sortDir = 'asc';
+
+    function renderAdminStats() {
+      const c = { LA:0, OC:0, SD:0, SB:0 };
+      markets.forEach(m => { if (c[m.county] !== undefined) c[m.county]++; });
+      document.getElementById('adminMktCount').textContent = markets.length;
+      document.getElementById('adminStats').innerHTML = `
+        <div class="col-span-2 sm:col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-red-100 p-3 text-center">
+          <div class="font-display text-3xl font-black text-brand-800">${markets.length}</div>
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-brand-800/50 mt-0.5">Total</div>
+        </div>
+        ${['LA','OC','SD','SB'].map(k=>`<div class="bg-white rounded-2xl shadow-sm ring-1 ring-red-100 p-3 text-center"><div class="font-display text-3xl font-black text-brand-700">${c[k]}</div><div class="text-[10px] font-extrabold uppercase tracking-wider text-brand-800/50 mt-0.5">${k}</div></div>`).join('')}`;
+      const DAY_ORD = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const dc = {};
+      markets.forEach(m => { const d = DAY_ORD.find(x => m.day.includes(x))||m.day; dc[d]=(dc[d]||0)+1; });
+      document.getElementById('dayBreakdown').innerHTML =
+        Object.entries(dc).sort((a,b)=>(DAY_ORD.indexOf(a[0])<0?99:DAY_ORD.indexOf(a[0]))-(DAY_ORD.indexOf(b[0])<0?99:DAY_ORD.indexOf(b[0])))
+          .map(([d,n])=>`<span class="text-[11px] font-bold rounded-full px-3 py-1 bg-white ring-1 ring-red-100 text-brand-800"><strong>${n}</strong> ${d}</span>`).join('');
+    }
+
+    function getFiltered() {
+      const q = document.getElementById('adminSearch').value.trim().toLowerCase();
+      const county = document.getElementById('countyFilter').value;
+      return markets.filter(m =>
+        (!q || m.name.toLowerCase().includes(q) || m.city.toLowerCase().includes(q) || m.zip.includes(q)) &&
+        (!county || m.county === county)
+      ).sort((a,b) => {
+        const va = String(a[sortCol]||'').toLowerCase(), vb = String(b[sortCol]||'').toLowerCase();
+        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      });
+    }
+
+    function renderAdminTable() {
+      const data = getFiltered(), tbody = document.getElementById('adminTableBody');
+      document.querySelectorAll('th[data-col]').forEach(th => {
+        const ind = th.querySelector('.sort-ind'); if (!ind) return;
+        ind.textContent = th.dataset.col === sortCol ? (sortDir==='asc'?' ▲':' ▼') : ' ▲▼';
+        ind.style.opacity = th.dataset.col === sortCol ? '1' : '0.3';
+      });
+      document.getElementById('adminCount').textContent = `Showing ${data.length} of ${markets.length} market${markets.length!==1?'s':''}`;
+      if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-brand-800/30 italic text-sm">No markets match.</td></tr>`; return; }
+      const dk = d => d.split(' ')[0];
+      tbody.innerHTML = data.map(m => `
+        <tr class="admin-row border-b border-red-50 transition-colors">
+          <td class="px-3 py-3 font-bold text-brand-900 text-sm">${esc(m.name)}</td>
+          <td class="px-3 py-3 text-brand-800/70 text-sm">${esc(m.city)}</td>
+          <td class="px-3 py-3"><span class="badge-${m.county} text-[10px] font-extrabold uppercase rounded-full px-2 py-0.5">${m.county}</span></td>
+          <td class="px-3 py-3 font-mono font-black text-brand-700 text-[12px]">${esc(m.zip)}</td>
+          <td class="px-3 py-3 hide-mobile"><span class="text-xs font-bold rounded-lg px-2 py-0.5 day-${dk(m.day)}">${esc(m.day)}</span></td>
+          <td class="px-3 py-3 text-brand-800/60 text-[11px] hide-mobile">${esc(m.time)}</td>
+          <td class="px-3 py-3"><div class="flex justify-end gap-1.5">
+            <button onclick="openEditModal(${m.id})" class="w-8 h-8 flex items-center justify-center rounded-lg ring-1 ring-red-100 hover:ring-brand-700 transition-colors text-sm">✏️</button>
+            <button onclick="triggerDelete(${m.id})" class="w-8 h-8 flex items-center justify-center rounded-lg ring-1 ring-red-100 hover:bg-red-50 hover:ring-red-300 transition-colors text-sm">🗑️</button>
+          </div></td>
+        </tr>`).join('');
+    }
+
+    function setSort(col) {
+      sortDir = sortCol === col ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
+      sortCol = col; renderAdminTable();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // CRUD
+    // ══════════════════════════════════════════════════════════════════
+
+    function openAddModal()  { clearForm(); document.getElementById('editId').value=''; document.getElementById('modalHeading').textContent='Add New Market'; document.getElementById('modalSaveBtn').textContent='Save'; openModal(); }
+
+    function openEditModal(id) {
+      const m = markets.find(x=>x.id===id); if (!m) return;
+      clearForm();
+      document.getElementById('editId').value=id; document.getElementById('fName').value=m.name;
+      document.getElementById('fCity').value=m.city; document.getElementById('fCounty').value=m.county;
+      document.getElementById('fZip').value=m.zip; document.getElementById('fTime').value=m.time;
+      const ds = document.getElementById('fDay'), opt = Array.from(ds.options).find(o=>o.value===m.day);
+      if (opt) ds.value=m.day;
+      else { ds.value='__custom'; document.getElementById('fDayCustom').value=m.day; document.getElementById('customDayWrap').classList.remove('hidden'); }
+      document.getElementById('modalHeading').textContent='Edit Market'; document.getElementById('modalSaveBtn').textContent='Save Changes';
+      openModal();
+    }
+
+    function saveMarket() {
+      if (!validateForm()) return;
+      const dayVal = document.getElementById('fDay').value;
+      const day    = dayVal === '__custom' ? document.getElementById('fDayCustom').value.trim() : dayVal;
+      const editId = document.getElementById('editId').value;
+      const entry  = {
+        name: document.getElementById('fName').value.trim(), city: document.getElementById('fCity').value.trim(),
+        county: document.getElementById('fCounty').value, zip: document.getElementById('fZip').value.trim(),
+        day, time: document.getElementById('fTime').value.trim(),
+      };
+      if (editId) {
+        const id=parseInt(editId,10), idx=markets.findIndex(m=>m.id===id);
+        if (idx>-1) markets[idx]={...markets[idx],...entry};
+        persistMarkets(markets); closeModal();
+        renderAdminStats(); renderAdminTable(); renderRefTable(); renderCountyBreakdown(); plotPins();
+        toast('✏️ Market Updated in Local Storage!','info');
+      } else {
+        markets.push({ id:nextId(), lat:null, lng:null, ...entry });
+        persistMarkets(markets); closeModal();
+        renderAdminStats(); renderAdminTable(); renderRefTable(); renderCountyBreakdown(); plotPins();
+        toast('🎉 Success: Market Saved to Local Storage!','success');
+      }
+    }
+
+    let _pendingAction = null;
+
+    function triggerDelete(id) {
+      const m = markets.find(x=>x.id===id); if (!m) return;
+      showConfirm('🗑️','Delete this market?',`"${m.name}" will be removed from localStorage.`,'Delete','danger',() => {
+        markets = markets.filter(x=>x.id!==id);
+        persistMarkets(markets); renderAdminStats(); renderAdminTable(); renderRefTable(); renderCountyBreakdown(); plotPins();
+        toast('🗑️ Market Deleted','error');
+      });
+    }
+
+    function triggerReset() {
+      showConfirm('↺','Reset to default?','All custom changes will be wiped and the 28-market baseline will be re-seeded.','Reset','danger',() => {
+        markets = JSON.parse(JSON.stringify(BASELINE));
+        persistMarkets(markets); renderAdminStats(); renderAdminTable(); renderRefTable(); renderCountyBreakdown(); plotPins();
+        toast('↺ Reset to 28-market baseline','warn');
+      });
+    }
+
+    function exportData() {
+      const blob = new Blob([JSON.stringify({ markets, telemetry:ZIP_Search_Table, exportedAt:new Date().toISOString(), version:'v7' },null,2)],{type:'application/json'});
+      const url  = URL.createObjectURL(blob);
+      const a    = Object.assign(document.createElement('a'),{href:url,download:'la-pinsa-mia-v7-export.json'});
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      toast(`⬇ ${markets.length} markets exported`,'info');
+    }
+
+    function importData(e) {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const parsed=JSON.parse(ev.target.result), mktData=Array.isArray(parsed)?parsed:(parsed.markets||null);
+          if (!mktData||!mktData.every(m=>m.name&&m.zip)) throw new Error();
+          showConfirm('⬆',`Import ${mktData.length} markets?`,'This replaces all current data.','Import','primary',() => {
+            markets=mktData; persistMarkets(markets);
+            renderAdminStats(); renderAdminTable(); renderRefTable(); renderCountyBreakdown(); plotPins();
+            toast(`⬆ ${markets.length} markets imported`,'info');
+          });
+        } catch { toast('Import failed — invalid JSON','error'); }
+        e.target.value='';
+      };
+      reader.readAsText(file);
+    }
+
+    function renderRefTable() {
+      document.getElementById('marketCountLabel').textContent  = markets.length;
+      document.getElementById('footerMarketCount').textContent = markets.length;
+      document.getElementById('refTableBody').innerHTML = markets.map(m=>`
+        <tr class="hover:bg-cream transition-colors">
+          <td class="px-3 py-2.5 text-brand-800/40 font-mono text-[11px]">${m.id}</td>
+          <td class="px-3 py-2.5 font-semibold text-brand-900">${esc(m.name)}</td>
+          <td class="px-3 py-2.5 font-mono font-black text-brand-700">${esc(m.zip)}</td>
+          <td class="px-3 py-2.5 text-brand-800/70">${esc(m.day)}</td>
+          <td class="px-3 py-2.5 text-brand-800/60 hide-mobile">${esc(m.time)}</td>
+        </tr>`).join('');
+    }
+
+    document.getElementById('allMarketsDetails').addEventListener('toggle', function() {
+      document.getElementById('allMktsChev').classList.toggle('rotated', this.open);
+    });
+
+    // ── Modals ────────────────────────────────────────────────────────
+    function openModal()   { document.getElementById('marketModal').classList.add('open'); setTimeout(()=>document.getElementById('fName').focus(),60); }
+    function closeModal()  { document.getElementById('marketModal').classList.remove('open'); }
+    function showConfirm(icon,title,msg,okLabel,variant,action) {
+      document.getElementById('confirmIcon').textContent=icon; document.getElementById('confirmTitle').textContent=title; document.getElementById('confirmMsg').textContent=msg;
+      const ok=document.getElementById('confirmOkBtn'); ok.textContent=okLabel;
+      ok.className=variant==='danger'?'text-sm font-extrabold px-5 py-2.5 rounded-xl bg-red-700 text-white hover:bg-red-800 transition-colors':'text-sm font-extrabold px-5 py-2.5 rounded-xl panel-grad text-white shadow-sm transition-all';
+      _pendingAction=action; document.getElementById('confirmDialog').classList.add('open');
+    }
+    function closeConfirm() { document.getElementById('confirmDialog').classList.remove('open'); _pendingAction=null; }
+    function runConfirm()   { closeConfirm(); if(typeof _pendingAction==='function'){_pendingAction(); _pendingAction=null;} }
+    document.getElementById('marketModal').addEventListener('click',   e => { if(e.target===e.currentTarget) closeModal(); });
+    document.getElementById('confirmDialog').addEventListener('click', e => { if(e.target===e.currentTarget) closeConfirm(); });
+    document.addEventListener('keydown', e => {
+      if (e.key!=='Escape') return;
+      if (document.getElementById('confirmDialog').classList.contains('open')) closeConfirm();
+      else if (document.getElementById('marketModal').classList.contains('open')) closeModal();
+    });
+
+    // ── Form validation ───────────────────────────────────────────────
+    function clearForm() {
+      ['fName','fCity','fZip','fTime','fDayCustom'].forEach(id=>{const el=document.getElementById(id);el.value='';el.classList.remove('err');});
+      document.getElementById('fCounty').value=''; document.getElementById('fDay').value='';
+      document.getElementById('customDayWrap').classList.add('hidden');
+      ['eName','eCity','eCounty','eZip','eDay','eTime'].forEach(id=>{document.getElementById(id).textContent='';});
+    }
+    function toggleCustomDay() {
+      const val=document.getElementById('fDay').value, wrap=document.getElementById('customDayWrap');
+      if(val==='__custom'){wrap.classList.remove('hidden');document.getElementById('fDayCustom').focus();}
+      else{wrap.classList.add('hidden');document.getElementById('fDayCustom').value='';}
+    }
+    document.getElementById('fZip').addEventListener('input',function(){this.value=this.value.replace(/\D/g,'').slice(0,5);});
+    function setFieldErr(fid,eid,msg){document.getElementById(fid).classList.toggle('err',!!msg);document.getElementById(eid).textContent=msg||'';return !msg;}
+    function validateForm() {
+      const name=document.getElementById('fName').value.trim(), city=document.getElementById('fCity').value.trim(),
+            county=document.getElementById('fCounty').value, zip=document.getElementById('fZip').value.trim(),
+            dayVal=document.getElementById('fDay').value, dayCus=document.getElementById('fDayCustom').value.trim(),
+            time=document.getElementById('fTime').value.trim();
+      return [
+        setFieldErr('fName','eName',!name?'Market name is required.':''),
+        setFieldErr('fCity','eCity',!city?'City is required.':''),
+        setFieldErr('fCounty','eCounty',!county?'Select a county.':''),
+        setFieldErr('fZip','eZip',!zip?'ZIP is required.':(!/^\d{5}$/.test(zip)?'Must be 5 digits.':'')),
+        setFieldErr('fDay','eDay',!dayVal?'Select a day.':(dayVal==='__custom'&&!dayCus?'Enter a custom day.':'')),
+        setFieldErr('fTime','eTime',!time?'Hours are required.':''),
+      ].every(Boolean);
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────
+    function toast(msg, type='success') {
+      const icons={success:'✅',error:'🗑️',info:'ℹ️',warn:'↺',ai:'🤖'};
+      const el=document.createElement('div');
+      el.className=`toast toast-${type} pop`;
+      el.innerHTML=`<span style="flex-shrink:0;font-size:1rem;">${icons[type]||'✓'}</span><span>${msg}</span>`;
+      document.getElementById('toastStack').appendChild(el);
+      setTimeout(()=>{el.classList.add('out');el.addEventListener('animationend',()=>el.remove(),{once:true});setTimeout(()=>el.remove(),400);},3000);
+    }
+
+    // ── Input wiring ──────────────────────────────────────────────────
+    document.getElementById('zipInput').addEventListener('keydown', e=>{if(e.key==='Enter')handleSearch();});
+    document.getElementById('zipInput').addEventListener('input', function() {
+      if(/^\d+$/.test(this.value)) this.value=this.value.slice(0,5);
+      if(this.value.length>0){document.getElementById('errorBadge').classList.add('hidden');this.classList.remove('ring-red-400');}
+      filterRefTable();
+    });
+
+    // ── Utility ───────────────────────────────────────────────────────
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── AI nav badge ──────────────────────────────────────────────────
+    function initAIStatusUI() {
+      const ready = OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_API_KEY_HERE';
+      const nb = document.getElementById('aiNavBadge'), sh = document.getElementById('aiSearchHint');
+      if (ready) {
+        nb.className='hidden sm:flex items-center gap-1 text-[10px] font-extrabold rounded-full px-2.5 py-1 border bg-violet-50 border-violet-200 text-violet-700';
+        nb.innerHTML='🤖 AI Active';
+        sh.innerHTML=`<div class="flex items-center gap-2 text-[11px] font-semibold text-violet-700"><span class="inline-flex items-center gap-1 bg-violet-50 border border-violet-200 rounded-full px-2 py-0.5 font-extrabold">🤖 ChatGPT AI</span><span class="text-brand-800/40">active for out-of-bounds ZIPs</span></div>`;
+      } else {
+        nb.className='hidden sm:flex items-center gap-1 text-[10px] font-extrabold rounded-full px-2.5 py-1 border bg-amber-50 border-amber-200 text-amber-700';
+        nb.innerHTML='🔑 No API Key';
+        sh.innerHTML=`<p class="text-[10px] text-brand-800/30 font-semibold">AI recommendations are off in this public demo (they need a server-side OpenAI key).</p>`;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // INIT
+    // ══════════════════════════════════════════════════════════════════
+
+    renderRefTable();
+    renderAdminStats();
+    renderAdminTable();
+    renderTelemetry();
+    renderCountyBreakdown();
+    initAIStatusUI();
+    initMap();   // ← v7: boot the Leaflet map
+
+    if (ZIP_Search_Table.length > 0) {
+      const b = document.getElementById('biLiveBadge');
+      b.textContent = ZIP_Search_Table.length; b.classList.remove('hidden');
+    }
+  </script>
+
+</body>
+</html>
